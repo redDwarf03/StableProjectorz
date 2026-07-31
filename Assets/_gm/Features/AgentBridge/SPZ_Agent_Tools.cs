@@ -28,15 +28,19 @@ namespace spz {
 	        if (_registered){ return; }
 	        _registered = true;
 
-	        Add("describe",
+	        Add("describe", "Describe the tool catalogue",
 	            "Protocol version and the full catalogue of available tools. Call this first.",
-	            null, Tool_Describe);
+	            null, Tool_Describe,
+	            readOnly: true, idempotent: true);
 
-	        Add("get_app_state",
+	        Add("get_app_state", "Read app state",
 	            "Snapshot of the app: version, WebUI connections, loaded 3D model, UDIM tiles, selection, and whether a generation is running.",
-	            null, Tool_GetAppState);
+	            null, Tool_GetAppState,
+	            readOnly: true, idempotent: true);
 
-	        Add("get_viewport_screenshot",
+	        // Read-only, but not idempotent: the viewport changes as the user navigates,
+	        // so two identical calls legitimately return different pixels.
+	        Add("get_viewport_screenshot", "Capture the viewport",
 	            "PNG capture of a region of the main 3D viewport, as base64. Coordinates are viewport-normalized, (0,0) bottom-left to (1,1) top-right.",
 	            new List<AgentParamDesc>{
 	                new AgentParamDesc("min_x", "number", false, "Left edge, 0..1. Default 0."),
@@ -44,35 +48,48 @@ namespace spz {
 	                new AgentParamDesc("max_x", "number", false, "Right edge, 0..1. Default 1."),
 	                new AgentParamDesc("max_y", "number", false, "Top edge, 0..1. Default 1."),
 	            },
-	            Tool_Screenshot, returnsImage: true);
+	            Tool_Screenshot,
+	            readOnly: true, idempotent: false, returnsImage: true);
 
-	        Add("list_generations",
+	        Add("list_generations", "List stored generations",
 	            "How many stored generations exist per kind, plus the GUID of the most recent one. Each generation keeps its camera POV, prompts, result textures and masks.",
-	            null, Tool_ListGenerations);
+	            null, Tool_ListGenerations,
+	            readOnly: true, idempotent: true);
 
-	        Add("list_events",
+	        Add("list_events", "List UI event ids",
 	            "Every StaticEvents id currently registered by the running UI, with the parameter types each one expects. This is the raw action surface.",
 	            new List<AgentParamDesc>{
 	                new AgentParamDesc("filter", "string", false, "Case-insensitive substring to narrow the list, e.g. 'Settings:'."),
 	            },
-	            Tool_ListEvents);
+	            Tool_ListEvents,
+	            readOnly: true, idempotent: true);
 
-	        Add("invoke_event",
+	        // The only writing tool here. What it does depends entirely on the id, and
+	        // some ids delete work (clearing generations, resetting settings), so it is
+	        // flagged destructive so that a client can ask the user before firing it.
+	        Add("invoke_event", "Fire a UI event",
 	            "Fire a StaticEvents id, the same way the corresponding UI control would. Use list_events to discover ids and their argument types. Reports an error if the id is unknown or the arguments don't match.",
 	            new List<AgentParamDesc>{
 	                new AgentParamDesc("id",   "string", true,  "Event id, e.g. 'Settings:OpenSettingsPanel'."),
 	                new AgentParamDesc("args", "array",  false, "Arguments, in order. Omit for a no-argument event."),
 	            },
-	            Tool_InvokeEvent);
+	            Tool_InvokeEvent,
+	            readOnly: false, idempotent: false, destructive: true);
 	    }
 
 
-	    static void Add(string name, string description, List<AgentParamDesc> prms,
-	                    AgentToolHandler handler, bool returnsImage = false){
+	    static void Add(string name, string title, string description, List<AgentParamDesc> prms,
+	                    AgentToolHandler handler,
+	                    bool readOnly = false, bool idempotent = false,
+	                    bool destructive = false, bool returnsImage = false){
 	        var desc = new AgentToolDesc{
 	            name = name,
+	            title = title,
 	            description = description,
 	            returnsImage = returnsImage,
+	            readOnly = readOnly,
+	            destructive = destructive,
+	            idempotent = idempotent,
 	            prms = prms ?? new List<AgentParamDesc>()
 	        };
 	        _tools[name] = new AgentTool(desc, handler);

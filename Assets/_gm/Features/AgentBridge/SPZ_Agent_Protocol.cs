@@ -54,9 +54,17 @@ namespace spz {
 
 	public class AgentToolDesc {
 	    [JsonProperty("name")]        public string name;
+	    [JsonProperty("title")]       public string title;         // human-readable label
 	    [JsonProperty("description")] public string description;
 	    [JsonProperty("returns_image")] public bool returnsImage;   // result is {"image_png_base64": "..."}
 	    [JsonProperty("params")]      public List<AgentParamDesc> prms = new List<AgentParamDesc>();
+
+	    // Behaviour hints. The app is the only side that actually knows whether a tool
+	    // mutates state, so it declares them here and the MCP server forwards them as
+	    // MCP tool annotations. Conservative defaults: assume a tool writes.
+	    [JsonProperty("read_only")]   public bool readOnly = false;
+	    [JsonProperty("destructive")] public bool destructive = false;
+	    [JsonProperty("idempotent")]  public bool idempotent = false;
 	}
 
 
