@@ -148,5 +148,71 @@ namespace spz {
 	        var newAct = existing - act;
 	        if (newAct == null) { _actionsDict.Remove(id); } else { _actionsDict[id] = newAct; }
 	    }
+
+
+	    // INTROSPECTION
+	    // Lets a caller discover what exists instead of guessing. Used by SPZ_Agent_Bridge
+	    // to publish the event ids, but there's nothing bridge-specific about it.
+
+	    public static List<string> GetRegisteredIds() {
+	        var ids = new List<string>(_actionsDict.Keys);
+	        ids.Sort(StringComparer.Ordinal);
+	        return ids;
+	    }
+
+	    public static bool IsRegistered(string id) => _actionsDict.ContainsKey(id);
+
+	    // Parameter types the delegate behind 'id' expects. Empty array for a plain
+	    // Action, null when the id isn't registered at all.
+	    public static Type[] GetParameterTypes(string id) {
+	        if (!_actionsDict.TryGetValue(id, out var d)) { return null; }
+	        var invoke = d.GetType().GetMethod("Invoke");
+	        if (invoke == null) { return Type.EmptyTypes; }
+	        var ps = invoke.GetParameters();
+	        var types = new Type[ps.Length];
+	        for (int i = 0; i < ps.Length; i++) { types[i] = ps[i].ParameterType; }
+	        return types;
+	    }
+
+	    // The Invoke() overloads above stay silent when the id is unknown or the
+	    // signature doesn't match. That's fine for UI wiring (a missing binding is
+	    // simply a dead button), but a caller driving the app from outside needs to
+	    // know whether anything actually ran. This reports instead of swallowing.
+	    public static bool TryInvokeDynamic(string id, object[] args, out string error) {
+	        error = null;
+	        if (!_actionsDict.TryGetValue(id, out var d)) {
+	            error = $"Event ID '{id}' is not registered.";
+	            return false;
+	        }
+	        Type[] expected = GetParameterTypes(id);
+	        args ??= Array.Empty<object>();
+	        if (args.Length != expected.Length) {
+	            error = $"Event ID '{id}' expects {expected.Length} argument(s), got {args.Length}.";
+	            return false;
+	        }
+	        var converted = new object[expected.Length];
+	        for (int i = 0; i < expected.Length; i++) {
+	            try {
+	                converted[i] = ConvertArg(args[i], expected[i]);
+	            } catch (Exception ex) {
+	                error = $"Argument {i} of '{id}': cannot convert to {expected[i].Name}. {ex.Message}";
+	                return false;
+	            }
+	        }
+	        try {
+	            d.DynamicInvoke(converted);
+	        } catch (System.Reflection.TargetInvocationException ex) {
+	            error = $"Event ID '{id}' threw: {ex.InnerException?.Message ?? ex.Message}";
+	            return false;
+	        }
+	        return true;
+	    }
+
+	    static object ConvertArg(object value, Type target) {
+	        if (value == null) { return target.IsValueType ? Activator.CreateInstance(target) : null; }
+	        if (target.IsInstanceOfType(value)) { return value; }
+	        if (target.IsEnum) { return Enum.ToObject(target, Convert.ToInt64(value)); }
+	        return Convert.ChangeType(value, target, System.Globalization.CultureInfo.InvariantCulture);
+	    }
 	}
 }//end namespace
