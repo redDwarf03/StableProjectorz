@@ -83,12 +83,11 @@ Managed by `Gen3D_MGR`.
 *   **Abstraction:** Unifies Mouse clicks and Tablet Pen pressure into a single API.
 *   **Coords:** Tracks cursor in Screen Pixels and Viewport Space (0–1).
 
-## 🔌 9. Agent Bridge (control socket for external tools like MCP)
+## 🔌 9. Agent Bridge (control socket for external tools, e.g. MCP)
 Lets an outside program read app state, capture the viewport, and fire UI actions.<br>
-Plain JSON over TCP, one object per line — any language can talk to it.
+Plain JSON over TCP. By [redDwarf03](https://github.com/redDwarf03), [PR #8](https://github.com/IgorAherne/StableProjectorz/pull/8).
 
-*   **Off by default.** Needs `--agent-bridge` in `spz.config`. Binds `127.0.0.1` only. Add `--agent-bridge-token=` for a password — without it, any program on your PC can connect.
-*   **Code:** `Assets/_gm/Features/AgentBridge` (own README). Self-starting, no scene or prefab. Tools run on the main thread.
-*   **`StaticEvents` gained** `GetRegisteredIds`, `GetParameterTypes`, `TryInvokeDynamic` — the old `Invoke()` fails silently on a bad id, fine for buttons but not for an outside caller.
-*   **For LLMs:** [spz-mcp](https://github.com/redDwarf03/spz-mcp) — separate MCP server (third-party, MIT) that exposes these tools to Claude. Reads the tool list from the running app, so it never needs updating when we add one.
-*   By [redDwarf03](https://github.com/redDwarf03), [PR #8](https://github.com/IgorAherne/StableProjectorz/pull/8).
+*   **Off by default:** needs `--agent-bridge` in `spz.config`. Loopback only; `--agent-bridge-token=` adds a password.
+*   **Code:** `Assets/_gm/Features/AgentBridge` — self-starting, no scene or prefab. See its README.
+*   **`StaticEvents`** gained introspection + `TryInvokeDynamic`, which reports failures instead of ignoring them.
+*   **For LLMs:** [spz-mcp](https://github.com/redDwarf03/spz-mcp) — separate MIT server, reads the tool list from the running app.
