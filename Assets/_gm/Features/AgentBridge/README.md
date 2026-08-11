@@ -13,10 +13,20 @@ project root when running from the Editor), then start the app:
 ```
 --agent-bridge
 --agent-bridge-port=8765          # optional, this is the default
---agent-bridge-token=some-secret  # optional shared secret
+--agent-bridge-token=some-secret  # optional, pins a secret of your own
 ```
 
 The console logs `[SPZ_Agent_Bridge] listening on 127.0.0.1:8765` on success.
+
+**Every request must carry an access token.** If you don't pin one in `spz.config`,
+the app generates a random secret on first launch and stores it at
+`%LOCALAPPDATA%/StableProjectorz/agent-bridge.token` (`~/.local/share/...` elsewhere).
+Clients read that same file, so in practice you configure nothing. The path is
+printed in the log.
+
+The token is not there to keep out an attacker who already runs code as you — it
+removes the mode where merely enabling the bridge let *any* local process, or a
+web page your browser happens to load, drive the application.
 
 ## Protocol
 
@@ -65,14 +75,24 @@ because most event ids are internal plumbing and carry no usable description on 
 ## Known limits
 
 * `Screenshot_MGR.ScreenshotViewport_viaScript` calls `StopAllCoroutines()`, so overlapping
-  captures would cancel each other. The tool serialises them and returns a busy error
-  instead of letting a request hang.
+  captures cancel each other — including a capture the *user* starts by dragging in the
+  viewport, which kills our callback before it can clear the busy latch. The latch
+  therefore expires after 10 s rather than being trusted to always be cleared.
 * Managers live in additively-loaded scenes, so early calls can arrive before
   `.instance` is assigned. Tools report this rather than throwing.
 * Commands time out after 30 s.
+* At most 8 concurrent connections, and 16 commands executed per frame; beyond that
+  connections are refused and the queue simply drains over more frames.
 
 ## Security
 
-Loopback-bound and opt-in, but it is still an unauthenticated local control channel
-unless you set a token. Any process on the machine can connect. Enable it only while
-you are actually using it.
+Loopback-bound, opt-in, and token-authenticated. A connection that sends something
+which isn't a valid request — bad JSON, a wrong token, an over-long line — is dropped
+rather than read past, which is what keeps a cross-origin POST from a web page from
+being able to fire commands at the port.
+
+Request lines are bounded at 256 KB and read byte-by-byte through a counted reader:
+`StreamReader.ReadLine()` would buffer without limit if a client never sent a newline.
+
+None of this defends against code already running as you. It removes the wide-open
+mode, nothing more. Enable the bridge only while you are actually using it.
