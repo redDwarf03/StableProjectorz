@@ -24,6 +24,14 @@ namespace spz {
 	    }
 
 
+	    // Statics outlive a play session when domain reload is disabled, so anything
+	    // holding per-session state has to be cleared before the next one starts.
+	    public static void ResetTransientState(){
+	        _screenshotInFlight = false;
+	        _screenshotStartedAt = 0f;
+	    }
+
+
 	    public static void RegisterAll(){
 	        if (_registered){ return; }
 	        _registered = true;
@@ -145,10 +153,20 @@ namespace spz {
 	    // request would silently kill the first one's callback and leave that command
 	    // hanging until it times out. Serialise here instead.
 	    static bool _screenshotInFlight = false;
+	    static float _screenshotStartedAt = 0f;
+	    const float SCREENSHOT_LATCH_TIMEOUT = 10f;
 
 	    static void Tool_Screenshot(JObject prms, Action<object> ok, Action<string> fail){
 	        var mgr = Screenshot_MGR.instance;
 	        if (mgr == null){ fail("Screenshot_MGR is not ready yet (scenes still loading)."); return; }
+
+	        // The user dragging a capture in the viewport also calls StopAllCoroutines(),
+	        // which kills our callback before it can clear the latch. Without this the
+	        // flag would stay set and every later screenshot would be refused.
+	        if (_screenshotInFlight &&
+	            Time.realtimeSinceStartup - _screenshotStartedAt > SCREENSHOT_LATCH_TIMEOUT){
+	            _screenshotInFlight = false;
+	        }
 	        if (_screenshotInFlight){ fail("A screenshot is already in progress; retry shortly."); return; }
 
 	        float minX = Mathf.Clamp01(ReadFloat(prms, "min_x", 0f));
@@ -158,6 +176,7 @@ namespace spz {
 	        if (maxX <= minX || maxY <= minY){ fail("Empty region: max_x/max_y must be greater than min_x/min_y."); return; }
 
 	        _screenshotInFlight = true;
+	        _screenshotStartedAt = Time.realtimeSinceStartup;
 	        try{
 	            mgr.ScreenshotViewport_viaScript(new Vector2(minX, minY), new Vector2(maxX, maxY),
 	                (min, max, tex) => {

@@ -87,7 +87,7 @@ Managed by `Gen3D_MGR`.
 Lets an outside program read app state, capture the viewport, and fire UI actions.<br>
 Plain JSON over TCP. By [redDwarf03](https://github.com/redDwarf03), [PR #8](https://github.com/IgorAherne/StableProjectorz/pull/8).
 
-*   **Off by default:** needs `--agent-bridge` in `spz.config`. Loopback only; `--agent-bridge-token=` adds a password.
+*   **Off by default:** needs `--agent-bridge` in `spz.config`. Loopback only, and every request needs a token — generated for you on first launch, so clients read it and you configure nothing. `--agent-bridge-token=` pins your own.
 *   **Code:** `Assets/_gm/Features/AgentBridge` — self-starting, no scene or prefab. See its README.
 *   **`StaticEvents`** gained introspection + `TryInvokeDynamic`, which reports failures instead of ignoring them.
 *   **For LLMs:** [spz-mcp](https://github.com/redDwarf03/spz-mcp) — separate MIT server, reads the tool list from the running app.
